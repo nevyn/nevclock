@@ -14,6 +14,12 @@
 
 #include "Button.h"
 
+struct Point {
+  int x;
+  int y;
+};
+typedef struct Point Point;
+
 // Application specific
 
 enum {
@@ -33,9 +39,6 @@ char modeNames[][16] = {
   "Lasers!"
 };
 
-#define BUTTON_S1 3
-#define BUTTON_S2 4
-#define BUTTON_S3 5
 #define BUZZER_PIN 50
 
 int lol = 0;
@@ -65,18 +68,61 @@ void setup()
   LCDInit();	    //Initialize the LCD
   LCDContrast(44);
   LCDClear(BLACK);    // Clear LCD to a solid color
-  Button_init(&b1, BUTTON_S1);
-  Button_init(&b2, BUTTON_S2);
-  Button_init(&b3, BUTTON_S3);
+  Button_init(&b1, kSwitch1_PIN);
+  Button_init(&b2, kSwitch2_PIN);
+  Button_init(&b3, kSwitch3_PIN);
+  
+  tmElements_t firstTime = {0, 0, 12, 2, 3, 10, 41};
+  setTime(makeTime(firstTime));
   
   mode = ModeTime;
 }
 
 void drawClock(tmElements_t forWhen, char *b) {
+  drawTextClock(forWhen, b);
+  drawAnalogClock(forWhen, false);
+}
+
+void drawTextClock(tmElements_t forWhen, char *b) {
   char sep = forWhen.Second%2 ? ' ' : ':';
   sprintf(b, "%c %02d%c%02d%c%02d", alarmIsOn?'!':' ', forWhen.Hour, sep, forWhen.Minute, sep, forWhen.Second);
   LCDPutStr(b, 35, 20, WHITE, BLACK);
 }
+
+void drawAnalogClock(tmElements_t when, BOOL inverse) {
+  int fColor = inverse ? BLACK : WHITE;
+  int hColor = inverse ? BLACK : RED;
+  int mColor = inverse ? BLACK : GREEN;
+  int sColor = inverse ? BLACK : YELLOW;
+  
+   Point tl = {60, 35};
+   int r = COL_HEIGHT*0.25;
+   Point mid = {tl.x + r, tl.y + r};
+   
+   LCDDrawCircle(tl.x, tl.y, COL_HEIGHT*0.25, fColor, FULLCIRCLE);
+   
+   float hfrac = (when.Hour*SECS_PER_HOUR + when.Minute*SECS_PER_MIN + when.Second)/(float)(SECS_PER_DAY);
+   Point hr = {
+     mid.x - cos(hfrac*M_PI*4)*r,
+     mid.y + sin(hfrac*M_PI*4)*r
+   };
+   LCDSetLine(mid.x, mid.y, hr.x, hr.y, hColor);
+   
+  float mfrac = (when.Minute*SECS_PER_MIN + when.Second)/(float)(SECS_PER_HOUR);
+  Point mi = {
+     mid.x - cos(mfrac*M_PI*2)*r*0.8,
+     mid.y + sin(mfrac*M_PI*2)*r*0.8
+   };
+   LCDSetLine(mid.x, mid.y, mi.x, mi.y, mColor);
+   
+  Point se = {
+     mid.x - cos((when.Second/30.)*M_PI)*r*0.9,
+     mid.y + sin((when.Second/30.)*M_PI)*r*0.9
+   };
+   LCDSetLine(mid.x, mid.y, se.x, se.y, sColor);
+}
+
+static time_t oldTime = 0;
 
 void loop()
 {
@@ -88,19 +134,20 @@ void loop()
     LCDClear(BLACK);
   }
     
-//  noTone(50);
-//  tone(50, 1000);
-//  delayMicroseconds(1000*500);
-//  noTone(50);
-//  tone(50, 2000);
-//  delayMicroseconds(1000*500);
-  LCDSetLine(60, 64, COL_HEIGHT, ROW_LENGTH-lol, BLACK);
-  LCDSetLine(60, 64, COL_HEIGHT, lol, BLACK);
+  // Erase last frame's graphics
+  if(mode == ModeLasers) {
+    LCDSetLine(60, 64, COL_HEIGHT, ROW_LENGTH-lol, BLACK);
+    LCDSetLine(60, 64, COL_HEIGHT, lol, BLACK);
+  }
+  tmElements_t oldForWhen; breakTime(oldTime, oldForWhen);
+  drawAnalogClock(oldForWhen, true);
   
+  // Draw this frame's graphics
   LCDPutStr(modeNames[mode], 10, 35, WHITE, BLACK);
   
-  int forWhen = mode == ModeSetAlarm ? alarmTime : now();
+  time_t forWhen = mode == ModeSetAlarm ? alarmTime : now();
   tmElements_t forWhen2; breakTime(forWhen, forWhen2);
+  oldTime = forWhen;
   
   drawClock(forWhen2, b);
   
@@ -135,10 +182,11 @@ void loop()
    alarmIsGoingOff = true;
   }
 
-  
-  lol += amount; if(lol >= ROW_LENGTH) lol = 0;
-  LCDSetLine(60, 64, COL_HEIGHT, lol, GREEN);
-  LCDSetLine(60, 64, COL_HEIGHT, ROW_LENGTH-lol, RED);
+  if(mode == ModeLasers) {
+    lol += amount; if(lol >= ROW_LENGTH) lol = 0;
+    LCDSetLine(60, 64, COL_HEIGHT, lol, GREEN);
+    LCDSetLine(60, 64, COL_HEIGHT, ROW_LENGTH-lol, RED);
+  }
 }
 
 
