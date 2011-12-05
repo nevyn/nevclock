@@ -13,6 +13,10 @@
 #include "HardwareSerial.h"
 
 #include "Button.h"
+#include "DioderLight.h"
+
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 struct Point {
   int x;
@@ -61,6 +65,8 @@ enum {
 typedef int AlarmEdit;
 AlarmEdit alarmEdit = AlarmEditHour;
 
+DioderLight light;
+
 
 void setup()
 {
@@ -72,8 +78,13 @@ void setup()
   Button_init(&b2, kSwitch2_PIN);
   Button_init(&b3, kSwitch3_PIN);
   
-  tmElements_t firstTime = {0, 0, 12, 2, 3, 10, 41};
+  DioderLight_init(&light, 2, 6, 10);
+  
+  tmElements_t firstTime = {45, 0, 12, 2, 3, 10, 41};
   setTime(makeTime(firstTime));
+  
+  tmElements_t alarmTimeE = {0, 2, 12, 2, 3, 10, 41};
+  alarmTime = makeTime(alarmTimeE);
   
   mode = ModeTime;
 }
@@ -187,6 +198,23 @@ void loop()
     LCDSetLine(60, 64, COL_HEIGHT, lol, GREEN);
     LCDSetLine(60, 64, COL_HEIGHT, ROW_LENGTH-lol, RED);
   }
+  
+  tmElements_t noww; breakTime(now(), noww);
+  time_t secondsIntoDay = noww.Second + noww.Minute*60 + noww.Hour*60*60;
+  tmElements_t alarmm; breakTime(alarmTime, alarmm);
+  time_t alarmSecondsIn = alarmm.Second + alarmm.Minute*60 + alarmm.Hour*60*60;
+  if(secondsIntoDay > (alarmSecondsIn + 900)) alarmSecondsIn += 86400;
+  
+  long long int alarmDistance = alarmSecondsIn - secondsIntoDay;
+  int fadeInFor = 900; 
+  long long int val = MAX(0, ((fadeInFor - alarmDistance)*255)/fadeInFor);
+  
+  if(secondsIntoDay-alarmSecondsIn > 0 && secondsIntoDay-alarmSecondsIn < 900) val = 255;
+  
+  DioderLight_setWhite(&light, val);
+  char l[16];
+  sprintf(l, " %lu", val);
+  LCDPutStr(l, 0, 0, WHITE, BLACK);
 }
 
 
